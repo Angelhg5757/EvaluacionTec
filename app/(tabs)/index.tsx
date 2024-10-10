@@ -1,70 +1,110 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import React, { useState, useEffect } from 'react';
+import { SafeAreaView, StyleSheet, View, Button, Text, FlatList, Alert } from 'react-native';
+import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function HomeScreen() {
+  const [locations, setLocations] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission to access location was denied');
+      }
+      const storedLocations = await AsyncStorage.getItem('locations');
+      if (storedLocations) {
+        setLocations(JSON.parse(storedLocations));
+      }
+    })();
+  }, []);
+
+  const getLocation = async () => {
+    try {
+      const { coords } = await Location.getCurrentPositionAsync({});
+      const newLocation = {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+      };
+
+      // Obtener la dirección postal
+      const [result] = await Location.reverseGeocodeAsync(newLocation);
+      const address = result ? `${result.street}, ${result.city}, ${result.region}` : 'Address not found';
+
+      const updatedLocations = [...locations, { ...newLocation, address }];
+      setLocations(updatedLocations);
+
+      await AsyncStorage.setItem('locations', JSON.stringify(updatedLocations));
+      console.log('Guardado:', newLocation);
+    } catch (error) {
+      console.error('Error getting location', error);
+      Alert.alert('Error', 'Could not get location');
+    }
+  };
+
+  const clearLocations = async () => {
+    try {
+      await AsyncStorage.removeItem('locations');
+      setLocations([]);
+      Alert.alert('Success', 'All locations have been cleared! 🗑️');
+    } catch (error) {
+      console.error('Error clearing locations', error);
+      Alert.alert('Error', 'Could not clear locations');
+    }
+  };
+
+  // Lista de elementos
+  const renderLocationItem = ({ item }: any) => (
+    <View style={styles.locationItem}>
+      <Text style={styles.addressText}>Dirección: {item.address}</Text>
+      <Text style={styles.locationText}>Latitud: {item.latitude}</Text>
+      <Text style={styles.locationText}>Longitud: {item.longitude}</Text>
+    </View>
+  );
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({ ios: 'cmd + d', android: 'cmd + m' })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.buttonContainer}>
+        <Button title="LOCATION NOW" color={"#11d8cc"} onPress={getLocation} />
+        <Button title="CLEAR LOCATIONS" color={"red"} onPress={clearLocations} />
+      </View>
+      <FlatList
+        data={locations}
+        renderItem={renderLocationItem}
+        keyExtractor={(item, index) => index.toString()}
+        contentContainerStyle={styles.listContainer}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+    padding: 20,
+  },
+  buttonContainer: {
+    marginBottom: 20,
+    marginTop: 100,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  listContainer: {
+    paddingBottom: 20,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  locationItem: {
+    backgroundColor: '#f53b6c',
+    marginVertical: 10,
+    padding: 20,
+    borderRadius: 10,
   },
+  locationText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  addressText:{
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  }
 });
